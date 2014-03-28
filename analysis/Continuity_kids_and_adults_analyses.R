@@ -1,156 +1,89 @@
-#########  analyze
+#############################################
+## analyze continuity data for disc_wl project
+## ali horowitz, mike frank
+##
+
 rm(list=ls())
 library(reshape)
 library(bootstrap)
 library(ggplot2)
 library(lme4)
 
-############ Kids only #############################
+#############################################
+## models of kid data first
+##
+d <- read.csv("data/all_data.csv")
 
-data <- read.csv("Continuity_kids.csv")
+## clean up data
+d$agegroup <- as.factor(d$agegroup)
+d$corr.side <- "A"
+d$corr.side[grepl("B",d$trial.type)] <- "B"
+d$corr.side <- factor(d$corr.side)
+d$correct <- d$side == as.numeric(d$corr.side)-1
 
-
-### LMER
-data$agegroup <- as.factor(data$agegroup)
-data$corr.side <- "A"
-data$corr.side[grepl("B",data$trial.type)] <- "B"
-data$corr.side <- factor(data$corr.side)
-
-# treat age as continuous, full model
-lm1 <- lmer(side ~ condition * corr.side * Age + (corr.side | subID),
-	data=data,family="binomial")	
-
-
-
-
-############ UPDATED mixed models
-
-### LMER
-data$agegroup <- as.factor(data$agegroup)
-data$corr.side <- "A"
-data$corr.side[grepl("B",data$trial.type)] <- "B"
-data$corr.side <- factor(data$corr.side)
-data$gender <- factor(data$gender)
-data$correct <- data$side == as.numeric(data$corr.side)-1
+kids <- subset(d, agegroup != "adult")
+kids$age <- as.numeric(as.character(kids$age)) # make age continuous again
 
 # treat age as continuous, full model
-lm.all.cont <- lmer(side ~ condition * corr.side * Age + (1 | subID), data=data, family="binomial")
+lm.all <- glmer(side ~ condition * corr.side * age + (corr.side | subid),
+	data=kids, family="binomial")	
+summary(lm.all) # three-way interaction
 
-lm.d.cont <- lmer(side ~ Age * corr.side + (1 | subID),data=subset(data,condition=="During"), family="binomial")
+# treat age as continuous, partial models
+lm.during.cont <- glmer(side ~ age * corr.side + (corr.side | subid),
+                  data=subset(kids, condition=="During"), 
+                  family="binomial")
+summary(lm.during.cont)
 
-lm.a.cont <- lmer(side ~ Age * corr.side + (1 | subID), data=subset(data,condition=="After"),family="binomial")
+lm.after.cont <- glmer(side ~ age * corr.side + (corr.side | subid), 
+                   data=subset(kids, condition=="After"),
+                   family="binomial")
+summary(lm.after.cont)
  
+# treat age as discrete, partial models
+lm.during.disc <- glmer(side ~ agegroup * corr.side - 1 + (corr.side | subid),
+                        data=subset(kids, condition=="During"), 
+                        family="binomial")
+summary(lm.during.disc)
+
+lm.after.disc <- glmer(side ~ agegroup * corr.side + (corr.side | subid), 
+                       data=subset(kids, condition=="After"),
+                       family="binomial")
+summary(lm.after.disc)
 
 
+#############################################
+## followup pairwise tests
+##
 
+agg.data.s <- aggregate(side ~ condition + corr.side + agegroup + subid,
+                        data=d, mean)
 
-
-
-
-
-
-
-
-
-
-######## Kids and adults #############################
-
-data <- read.csv("~/new compy/Stanford/Research/Frank Lab/Experiments/Continuity/disc_wl/data/Continuity_kids_and_adults.csv")
-
-data$agegroup <- as.factor(data$agegroup)
-data$corr.side <- "A"
-data$corr.side[grepl("B",data$trial.type)] <- "B"
-data$corr.side <- factor(data$corr.side)
-data$gender <- factor(data$gender)
-
-data$correct <- data$side[1]
-
-
-
-########## mixed model for "DURING"
-during_only <- subset(data,condition=="During")
-
-lm_during <- lmer(side ~ agegroup * corr.side - 1 + (corr.side | subID),data=during_only, family="binomial")
-
-
-
-##########mixed model for "After"
-after_only <- subset(data,condition=="After")
-
-lm_after <- lmer(side ~ agegroup * corr.side - 1 +(corr.side | subID),data=after_only, family="binomial")
-
-
-
-##### FOLLOWUP TESTS ######
-
-####### diff across trial type within condition by age group?
-
-agg.data.s <- aggregate(side ~ condition + corr.side + agegroup + subID,data=data,mean)
-
-ages <- levels(data$agegroup)
+ages <- levels(d$agegroup)
+conds <- c("During","After")
 
 for (a in ages) {
-	durings <- subset(agg.data.s,agg.data.s$agegroup==a & condition == "During")
-	afters <- subset(agg.data.s,agg.data.s$agegroup==a & condition == "After")
-
-	print(paste("Age:",a))
-	w1 <- wilcox.test(durings$side[durings$corr.side=="A"],
-					  durings$side[durings$corr.side=="B"],paired=T)$p.value
-	w2 <- wilcox.test(afters$side[afters$corr.side=="A"],
-					  afters$side[afters$corr.side=="B"],paired=T)$p.value
-	t1 <- t.test(durings$side[durings$corr.side=="A"],
-					  durings$side[durings$corr.side=="B"],paired=T)$p.value
-	t2 <- t.test(afters$side[afters$corr.side=="A"],
-					  afters$side[afters$corr.side=="B"],paired=T)$p.value
-	print(paste("During, Wilcox p: ",round(w1,digits=3),"t-test p:",round(t1,digits=3)))
-	print(paste("After, Wilcox p: ",round(w2,digits=3),"t-test p:",round(t2,digits=3)))
+  for (cond in conds) {
+    td <- subset(agg.data.s,agg.data.s$agegroup==a & condition == cond)
+    x <- td$side[td$corr.side=="A"]
+    y <- td$side[td$corr.side=="B"]
+    
+    w <- wilcox.test(x, y, paired=TRUE)
+    t <- t.test(x, y, paired=TRUE)
+    
+    print(paste(a, "s, ", cond, ", Wilcox -- p: ",
+                round(w$p.value,digits=3),
+                ", stat: ", 
+                round(w$statistic,digits=3),sep=""))
+    print(paste(a, "s, ", cond, ", t-test -- p: ",
+                round(t$p.value,digits=3),
+                ", stat: ", 
+                round(t$statistic,digits=3),
+                ", param: ",
+                t$parameter,sep=""))
+  }
 }
 
-
-
-########################## t values
-
-for (a in ages) {
-	durings <- subset(agg.data.s,agg.data.s$agegroup==a & condition == "During")
-	afters <- subset(agg.data.s,agg.data.s$agegroup==a & condition == "After")
-
-	print(paste("Age:",a))
-	w1 <- wilcox.test(durings$side[durings$corr.side=="A"],
-					  durings$side[durings$corr.side=="B"],paired=T)$statistic
-	w2 <- wilcox.test(afters$side[afters$corr.side=="A"],
-					  afters$side[afters$corr.side=="B"],paired=T)$statistic
-	t1 <- t.test(durings$side[durings$corr.side=="A"],
-					  durings$side[durings$corr.side=="B"],paired=T)$statistic
-	t2 <- t.test(afters$side[afters$corr.side=="A"],
-					  afters$side[afters$corr.side=="B"],paired=T)$statistic
-	print(paste("During, Wilcox p: ",round(w1,digits=3),"t-test t:",round(t1,digits=3)))
-	print(paste("After, Wilcox p: ",round(w2,digits=3),"t-test t:",round(t2,digits=3)))
-}
-
-
-
-########################## parameter aka degrees of freedom 
-
-agg.data.s <- aggregate(side ~ condition + corr.side + agegroup + subID,data=data,mean)
-
-ages <- levels(data$agegroup)
-
-for (a in ages) {
-	durings <- subset(agg.data.s,agg.data.s$agegroup==a & condition == "During")
-	afters <- subset(agg.data.s,agg.data.s$agegroup==a & condition == "After")
-
-	print(paste("Age:",a))
-	w1 <- wilcox.test(durings$side[durings$corr.side=="A"],
-					  durings$side[durings$corr.side=="B"],paired=T)$parameter
-	w2 <- wilcox.test(afters$side[afters$corr.side=="A"],
-					  afters$side[afters$corr.side=="B"],paired=T)$parameter
-	t1 <- t.test(durings$side[durings$corr.side=="A"],
-					  durings$side[durings$corr.side=="B"],paired=T)$parameter
-	t2 <- t.test(afters$side[afters$corr.side=="A"],
-					  afters$side[afters$corr.side=="B"],paired=T)$parameter
-	print(paste("During, Wilcox p: ","t-test p:",round(t1,digits=3)))
-	print(paste("After, Wilcox p: ","t-test p:",round(t2,digits=3)))
-}
 
 
 
