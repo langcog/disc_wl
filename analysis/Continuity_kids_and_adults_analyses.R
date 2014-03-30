@@ -49,7 +49,7 @@ conds <- c("During","After")
 
 for (a in ages) {
   for (cond in conds) {
-    td <- subset(agg.data.s,agg.data.s$agegroup==a & condition == cond)
+    td <- subset(agg.data.s, agg.data.s$agegroup==a & condition == cond)
     x <- td$side[td$corr.side=="A"]
     y <- td$side[td$corr.side=="B"]
     
@@ -69,6 +69,28 @@ for (a in ages) {
   }
 }
 
+## t-tests for after-second toy trials against chance. 
+
+t.test(subset(agg.data.s, agg.data.s$agegroup=="2" & 
+                          condition == "After" & 
+                          corr.side=="B")$side - .5)
+
+t.test(subset(agg.data.s, agg.data.s$agegroup=="3" & 
+                condition == "After" & 
+                corr.side=="B")$side - .5)
+
+t.test(subset(agg.data.s, agg.data.s$agegroup=="4" & 
+                condition == "After" & 
+                corr.side=="B")$side - .5)
+
+t.test(subset(agg.data.s, agg.data.s$agegroup=="5" & 
+                condition == "After" & 
+                corr.side=="B")$side - .5)
+
+
+t.test(subset(agg.data.s, agg.data.s$agegroup=="adult" & 
+                condition == "After" & 
+                corr.side=="B")$side - .5)
 #############################################
 ## PLOT
 ##
@@ -85,3 +107,15 @@ qplot(agegroup, side, colour=corr.side, facets=.~condition,
       geom=c("pointrange","line"),
       data=ms)
 
+## add gender for fun
+mss <- aggregate(side ~ subid + agegroup + corr.side + condition + gender, data=d, mean)
+ms <- aggregate(side ~ agegroup + corr.side + condition + gender, data=mss, mean)
+ms$cil <- aggregate(side ~ agegroup + corr.side + condition + gender, data=mss, ci.low)$side
+ms$cih <- aggregate(side ~ agegroup + corr.side + condition + gender, data=mss, ci.high)$side
+ms$n <- aggregate(subid ~ agegroup + corr.side + condition + gender, data=mss, n.unique)$subid
+
+qplot(agegroup, side, colour=corr.side, facets=gender~condition, 
+      ymin=side - cil, ymax=side + cih, group=corr.side,
+      position=position_dodge(width=.05),
+      geom=c("pointrange","line"),
+      data=ms)
