@@ -4,7 +4,7 @@
 ##
 
 rm(list=ls())
-source("~/Projects/R/Ranalysis/useful.R")
+source("~/Projects/R/Ranalysis/useful.R") # github.com/langcog/Ranalysis
 
 #############################################
 ## models of kid data first
@@ -47,8 +47,8 @@ agg.data.s <- aggregate(side ~ condition + corr.side + agegroup + subid,
 ages <- levels(d$agegroup)
 conds <- c("During","After")
 
-for (a in ages) {
-  for (cond in conds) {
+for (cond in conds) {
+  for (a in ages) {
     td <- subset(agg.data.s, agg.data.s$agegroup==a & condition == cond)
     x <- td$side[td$corr.side=="A"]
     y <- td$side[td$corr.side=="B"]
@@ -56,10 +56,10 @@ for (a in ages) {
     w <- wilcox.test(x, y, paired=TRUE)
     t <- t.test(x, y, paired=TRUE)
     
-    print(paste(a, "s, ", cond, ", Wilcox -- p: ",
-                round(w$p.value,digits=3),
-                ", stat: ", 
-                round(w$statistic,digits=3),sep=""))
+#     print(paste(a, "s, ", cond, ", Wilcox -- p: ",
+#                 round(w$p.value,digits=3),
+#                 ", stat: ", 
+#                 round(w$statistic,digits=3),sep=""))
     print(paste(a, "s, ", cond, ", t-test -- p: ",
                 round(t$p.value,digits=3),
                 ", stat: ", 
@@ -91,6 +91,16 @@ t.test(subset(agg.data.s, agg.data.s$agegroup=="5" &
 t.test(subset(agg.data.s, agg.data.s$agegroup=="adult" & 
                 condition == "After" & 
                 corr.side=="B")$side - .5)
+
+#############################################
+## DESCRIPTIVES
+##
+
+mss <- aggregate(correct ~ subid + agegroup + condition, data=d, mean)
+ms <- aggregate(correct ~ agegroup + condition, data=mss, mean)
+ms$sd <- aggregate(correct ~ agegroup + condition, data=mss, sd)$correct
+
+
 #############################################
 ## PLOT
 ##
@@ -106,6 +116,26 @@ qplot(agegroup, side, colour=corr.side, facets=.~condition,
       position=position_dodge(width=.05),
       geom=c("pointrange","line"),
       data=ms)
+
+
+## barplot
+levels(ms$condition) <- c("Experiment 1B","Experiment 1A")
+ms$condition <- factor(ms$condition, levels=c("Experiment 1A","Experiment 1B"))
+levels(ms$agegroup) <- c("2","3","4","5","Adults")
+
+qplot(agegroup, side, fill=corr.side, facets=.~condition, 
+      stat="identity",
+      position="dodge",
+      geom="bar",
+      data=ms) + 
+  geom_linerange(aes(ymin=side - cil, ymax=side + cih),
+                 position=position_dodge(width=.9)) + 
+  geom_hline(yintercept=.5, lty=2) +
+  xlab("Age (Years)") +
+  ylab("Proportion of Second Toy Selections") + 
+  scale_fill_discrete(name="Name Location",
+                       labels=c("First Toy","Second Toy"))
+                       
 
 ## add gender for fun
 mss <- aggregate(side ~ subid + agegroup + corr.side + condition + gender, data=d, mean)
